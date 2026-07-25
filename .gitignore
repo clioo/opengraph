@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-companion/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+.codex/
+AGENTS.md
+.env
+.env.*
+!.env.example
