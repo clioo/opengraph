@@ -90,6 +90,8 @@ To reproduce the Azure resource and configure the repository deployment token:
 
 The defaults target resource group `rg-opengraph-prod`, site `opengraph-web-prod`, region `westus2`, and repository `clioo/opengraph`. Override them with `AZURE_RESOURCE_GROUP`, `AZURE_STATIC_SITE_NAME`, `AZURE_LOCATION`, and `GITHUB_REPOSITORY` environment variables. The deployment token is written directly to GitHub Actions secrets and is never stored in the repository.
 
+Production uses `www.opengraph.work` as its canonical hostname. Squarespace DNS keeps DNSSEC enabled, points `www` to the Azure-generated hostname with a CNAME, and permanently forwards the apex `opengraph.work` to `www` while preserving paths. Domain Connect and email-security records remain untouched.
+
 ## Stack
 
 - React, TypeScript, and Vite
