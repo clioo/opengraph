@@ -2,6 +2,8 @@
 
 OpenGraph is a free, frontend-only visual workflow editor for developers. Build a graph with draggable nodes, annotations, directed or bidirectional edges, and loops; assign model and reasoning defaults; then copy the graph as a PNG. An optional local MCP companion lets Codex design the same graph conversationally.
 
+![OpenGraph workflow editor](assets/screenshots/opengraph-dark.png)
+
 Standalone mode stays entirely in the browser. Codex mode adds only a temporary process on your own computer; there is still no login, cloud backend, account, or remote synchronization.
 
 ## Run locally
