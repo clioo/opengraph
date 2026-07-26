@@ -133,6 +133,26 @@ test.describe("OpenGraph", () => {
     await expect(page.locator(".react-flow__edge")).toHaveCount(7);
   });
 
+  test("keeps each existing node model independent", async ({ page }) => {
+    await page.getByRole("button", { name: "Configure models and reasoning" }).click();
+    await page.getByRole("switch", { name: "Enable codex/gpt-5.6-terra" }).click();
+    await page.getByRole("button", { name: "Close inspector" }).click();
+
+    const firstNode = page.locator(".workflow-node").filter({ hasText: "1. Ingest" });
+    const secondNode = page.locator(".workflow-node").filter({ hasText: "2. Parse & chunk" });
+    await expect(firstNode).toContainText("gpt-5.6-sol");
+    await expect(secondNode).toContainText("gpt-5.6-sol");
+
+    await firstNode.click();
+    const inspector = page.getByRole("complementary", { name: "Node settings" });
+    await inspector.getByLabel("Node model").selectOption("codex/gpt-5.6-terra");
+
+    await expect(firstNode).toContainText("gpt-5.6-terra");
+    await expect(secondNode).toContainText("gpt-5.6-sol");
+    await secondNode.click();
+    await expect(inspector.getByLabel("Node model")).toHaveValue("codex/gpt-5.6-sol");
+  });
+
   test("starts a blank graph from a canvas double-click", async ({ page }) => {
     await page.getByRole("button", { name: "New graph", exact: true }).click();
     const canvas = page.locator(".canvas-shell");
