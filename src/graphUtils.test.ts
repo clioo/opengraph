@@ -14,6 +14,7 @@ import {
   normalizeDocument,
   resolvedNodeSettings,
   sanitizeDocument,
+  selectNodeModel,
   toggleEdgeDirection,
 } from "./graphUtils";
 import { makeInitialDocument } from "./store";
@@ -22,6 +23,26 @@ import { modelColor } from './types';
 import { MODEL_IDS } from './modelCatalog';
 
 describe("graph utilities", () => {
+  it("changes only the selected node model and remembers it for new nodes", () => {
+    const document = makeInitialDocument();
+    const first = createWorkflowNode({ x: 0, y: 0 }, "First");
+    const second = createWorkflowNode({ x: 300, y: 0 }, "Second");
+    const currentModel = document.defaults.model;
+    const nextModel = document.models.find(
+      (model) => model.enabled && model.id !== currentModel,
+    )!.id;
+    const source = {
+      ...document,
+      nodes: [first, second],
+    };
+
+    const result = selectNodeModel(source, first.id, nextModel);
+
+    expect(result.defaults.model).toBe(nextModel);
+    expect(result.nodes[0].data.kind === "workflow" && result.nodes[0].data.modelOverride).toBe(nextModel);
+    expect(result.nodes[1].data.kind === "workflow" && result.nodes[1].data.modelOverride).toBe(currentModel);
+  });
+
   it('assigns stable, distinct colors to model ids', () => {
     const ids = ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol', 'claude-opus-4-8', 'kimi-k2.5'];
     const colors = ids.map(modelColor);

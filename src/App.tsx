@@ -22,6 +22,7 @@ import {
   createWorkflowNode,
   getModelOptions,
   getReasoningOptions,
+  selectNodeModel,
   toggleEdgeDirection,
 } from "./graphUtils";
 import { copyBlobToClipboard, downloadBlob, renderGraphToBlob } from "./export";
@@ -1269,17 +1270,9 @@ function Inspector({
   const updateNodeModel = (model: ModelId) => {
     if (!node) return;
     commit((doc) => {
-      const defaults = { ...doc.defaults, model };
-      localStorage.setItem(MODEL_PREFERENCES_KEY, JSON.stringify({ models: doc.models, defaults }));
-      return {
-        ...doc,
-        defaults,
-        nodes: doc.nodes.map((item) =>
-          item.id === node.id && item.data.kind === 'workflow'
-            ? { ...item, data: { ...item.data, modelOverride: model } }
-            : item,
-        ),
-      };
+      const next = selectNodeModel(doc, node.id, model);
+      localStorage.setItem(MODEL_PREFERENCES_KEY, JSON.stringify({ models: next.models, defaults: next.defaults }));
+      return next;
     });
   };
   const updateEdge = (patch: Partial<NonNullable<GraphEdge["data"]>>) => {

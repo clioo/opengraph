@@ -49,6 +49,31 @@ export const createAnnotationNode = (
   data: { kind: "annotation", text },
 });
 
+export const selectNodeModel = (
+  document: GraphDocument,
+  nodeId: string,
+  model: ModelId,
+): GraphDocument => ({
+  ...document,
+  // `defaults.model` remembers the last selection for nodes created later.
+  // Materialize inherited values first so existing nodes remain independent.
+  defaults: { ...document.defaults, model },
+  nodes: document.nodes.map((node) =>
+    node.data.kind === "workflow"
+      ? {
+          ...node,
+          data: {
+            ...node.data,
+            modelOverride:
+              node.id === nodeId
+                ? model
+                : (node.data.modelOverride ?? document.defaults.model),
+          },
+        }
+      : node,
+  ),
+});
+
 type ConnectionLike = {
   source: string;
   target: string;
