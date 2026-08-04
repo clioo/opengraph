@@ -224,10 +224,11 @@ describe("OpenGraph store", () => {
 
   it("keeps editing available when a confirmed transaction cannot persist", () => {
     const store = useOpenGraphStore.getState();
-    const setItem = localStorage.setItem;
-    localStorage.setItem = (() => {
-      throw new Error("quota");
-    }) as typeof localStorage.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota");
+      });
     store.setEdgesLive(store.document.edges);
     store.setEdgesLive(store.document.edges);
     store.addNode(createWorkflowNode({ x: 12, y: 12 }));
@@ -237,7 +238,7 @@ describe("OpenGraph store", () => {
     store.undo();
     store.redo();
     expect(useOpenGraphStore.getState().saveStatus).toBe("error");
-    localStorage.setItem = setItem;
+    setItemSpy.mockRestore();
   });
 
   it("replaces a document through the integrity boundary", () => {
@@ -311,12 +312,13 @@ describe("OpenGraph store", () => {
     localStorage.setItem(STORAGE_KEY, "{broken");
     expect(loadDocument().name).toBe("Workflow");
 
-    const setItem = localStorage.setItem;
-    localStorage.setItem = (() => {
-      throw new Error("storage unavailable");
-    }) as typeof localStorage.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("storage unavailable");
+      });
     expect(loadDocument().name).toBe("Workflow");
-    localStorage.setItem = setItem;
+    setItemSpy.mockRestore();
   });
 
   it("persists normalized documents and handles write/read failures", () => {
@@ -326,18 +328,20 @@ describe("OpenGraph store", () => {
       version: 1,
       name: "Workflow",
     });
-    const setItem = localStorage.setItem;
-    localStorage.setItem = (() => {
-      throw new Error("quota");
-    }) as typeof localStorage.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota");
+      });
     expect(persistDocument(makeInitialDocument())).toBe(false);
-    localStorage.setItem = setItem;
-    const getItem = localStorage.getItem;
-    localStorage.getItem = (() => {
-      throw new Error("blocked");
-    }) as typeof localStorage.getItem;
+    setItemSpy.mockRestore();
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
     expect(getRecoveryDocument()).toBeNull();
-    localStorage.getItem = getItem;
+    getItemSpy.mockRestore();
     expect(MODEL_IDS).toContain("codex/gpt-5.6-sol");
     expect(MODEL_IDS).toContain("claude-code/claude-opus-4.8");
     expect(MODEL_IDS).toContain("kimi-code/k3");
