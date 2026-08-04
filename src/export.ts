@@ -1,6 +1,6 @@
 import { toBlob } from 'html-to-image'
-import type { GraphNode } from './types'
-import { getExportBounds } from './graphUtils'
+import type { GraphDocument, GraphNode } from './types'
+import { getExportBounds, sanitizeDocument } from './graphUtils'
 
 const readEdgeBounds = (element: HTMLElement) => {
   const boxes = [...element.querySelectorAll<SVGGraphicsElement>('.react-flow__edge-path, .react-flow__edge-textwrapper')]
@@ -62,6 +62,29 @@ export const copyBlobToClipboard = async (blob: Blob) => {
     return true
   } catch {
     return false
+  }
+}
+
+export const graphJsonFileName = (name: string) => {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${slug || 'opengraph'}.json`
+}
+
+export const documentToJsonBlob = (document: GraphDocument) =>
+  new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' })
+
+// The mirror of documentToJsonBlob: anything that isn't valid JSON describing
+// a graph document comes back null instead of throwing, so callers can show
+// one calm error path. Reuses the same integrity boundary as persisted state.
+export const parseDocumentJson = (text: string): GraphDocument | null => {
+  try {
+    return sanitizeDocument(JSON.parse(text))
+  } catch {
+    return null
   }
 }
 

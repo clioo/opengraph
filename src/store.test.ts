@@ -257,6 +257,22 @@ describe("OpenGraph store", () => {
     ).toBe(true);
   });
 
+  it("imports a document as a new graph in the active project", () => {
+    const store = useOpenGraphStore.getState();
+    const before = useOpenGraphStore.getState().graphs.length;
+    const previousActive = useOpenGraphStore.getState().activeGraphId;
+    store.importGraph({ ...makeInitialDocument(), name: "Imported flow" });
+    const state = useOpenGraphStore.getState();
+    expect(state.graphs).toHaveLength(before + 1);
+    const added = state.graphs.at(-1)!;
+    expect(state.activeGraphId).toBe(added.id);
+    expect(state.activeGraphId).not.toBe(previousActive);
+    expect(state.document.name).toBe("Imported flow");
+    expect(added.project).toBe("Personal");
+    expect(state.past).toHaveLength(0);
+    expect(state.selected).toBeNull();
+  });
+
   it("keeps multiple local graphs and switches between their titled documents", () => {
     const store = useOpenGraphStore.getState();
     store.commit((document) => ({ ...document, name: "First graph" }));
