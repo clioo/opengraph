@@ -156,6 +156,71 @@ describe("OpenGraph store", () => {
     );
   });
 
+  it("quick-adds a wired step from a plain sentence in one undo step", () => {
+    const store = useOpenGraphStore.getState();
+    expect(store.quickAddStep("   ", { x: 0, y: 0 })).toBeNull();
+    expect(useOpenGraphStore.getState().past).toHaveLength(0);
+
+    const anchor = createWorkflowNode({ x: 40, y: 400 }, "Fetch sources");
+    store.addNode(anchor);
+    store.setSelected({ id: anchor.id, kind: "node" });
+    const historyBefore = useOpenGraphStore.getState().past.length;
+    const addedId = store.quickAddStep(
+      "summarize each source and collect quotes",
+      { x: 0, y: 0 },
+    );
+    const state = useOpenGraphStore.getState();
+    const added = state.document.nodes.find((node) => node.id === addedId)!;
+    expect(added.data.kind === "workflow" && added.data.title).toBe(
+      "Summarize each source and collect quotes",
+    );
+    expect(added.position).toEqual({ x: 326, y: 400 });
+    expect(
+      state.document.edges.some(
+        (edge) => edge.source === anchor.id && edge.target === addedId,
+      ),
+    ).toBe(true);
+    expect(state.selected).toEqual({ id: addedId, kind: "node" });
+    expect(state.past).toHaveLength(historyBefore + 1);
+    store.undo();
+    const undone = useOpenGraphStore.getState().document;
+    expect(undone.nodes.some((node) => node.id === addedId)).toBe(false);
+    expect(undone.edges.some((edge) => edge.target === addedId)).toBe(false);
+  });
+
+  it("quick-adds unwired steps at a free spot near the fallback position", () => {
+    const store = useOpenGraphStore.getState();
+    const long =
+      "plan the launch checklist including owners, deadlines, and rollback steps";
+    const firstId = store.quickAddStep(long, { x: 120, y: 620 })!;
+    useOpenGraphStore.getState().setSelected(null);
+    const secondId = useOpenGraphStore
+      .getState()
+      .quickAddStep("review it", { x: 120, y: 620 })!;
+    const nodes = useOpenGraphStore.getState().document.nodes;
+    const first = nodes.find((node) => node.id === firstId)!;
+    const second = nodes.find((node) => node.id === secondId)!;
+    expect(first.position).toEqual({ x: 120, y: 620 });
+    expect(second.position.y).toBeGreaterThan(first.position.y);
+    expect(
+      first.data.kind === "workflow" && first.data.title.endsWith("…"),
+    ).toBe(true);
+    expect(first.data.kind === "workflow" && first.data.description).toBe(
+      "Plan the launch checklist including owners, deadlines, and rollback steps",
+    );
+    expect(second.data.kind === "workflow" && second.data.title).toBe(
+      "Review it",
+    );
+    expect(second.data.kind === "workflow" && second.data.description).toBe("");
+    expect(
+      useOpenGraphStore
+        .getState()
+        .document.edges.some(
+          (edge) => edge.target === firstId || edge.target === secondId,
+        ),
+    ).toBe(false);
+  });
+
   it("supports undo, redo, capability checks, and UI state actions", () => {
     const store = useOpenGraphStore.getState();
     expect(store.canUndo()).toBe(false);

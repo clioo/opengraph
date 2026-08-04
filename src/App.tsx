@@ -254,6 +254,7 @@ function App() {
     setAppearance,
     setToast,
     addNode,
+    quickAddStep,
     addEdgeFromConnection,
     deleteSelected,
     duplicateSelected,
@@ -290,6 +291,7 @@ function App() {
   const [onboardingProviders, setOnboardingProviders] = useState<ProviderId[]>(['codex']);
   const [organizationRevision, setOrganizationRevision] = useState<number | null>(null);
   const [organizationToast, setOrganizationToast] = useState<string | null>(null);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const skipViewportCommitUntilRef = useRef(0);
   const graphRenameCancelledRef = useRef(false);
   const graphSearchRef = useRef<HTMLInputElement>(null);
@@ -459,6 +461,10 @@ function App() {
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         deleteSelected();
+      }
+      if (!command && event.key === "/") {
+        event.preventDefault();
+        setQuickAddOpen(true);
       }
       if (event.key === "Escape") {
         setActiveTool("select");
@@ -1326,6 +1332,29 @@ function App() {
           />
         )}
       </main>
+      {quickAddOpen && (
+        <QuickAddBar
+          anchorTitle={(() => {
+            if (selected?.kind !== "node") return null;
+            const node = document.nodes.find(
+              (item) => item.id === selected.id,
+            );
+            return node?.type === "workflow" && node.data.kind === "workflow"
+              ? node.data.title
+              : null;
+          })()}
+          onSubmit={(text) =>
+            quickAddStep(
+              text,
+              screenToFlowPosition({
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2,
+              }),
+            ) !== null
+          }
+          onClose={() => setQuickAddOpen(false)}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           <span className="toast-dot" />
@@ -1370,6 +1399,53 @@ function App() {
 
 function documentElement() {
   return window.document.documentElement;
+}
+
+function QuickAddBar({
+  anchorTitle,
+  onSubmit,
+  onClose,
+}: {
+  anchorTitle: string | null;
+  onSubmit: (text: string) => boolean;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  return (
+    <div className="quick-add" role="dialog" aria-label="Quick add step">
+      <textarea
+        ref={inputRef}
+        rows={2}
+        spellCheck={false}
+        placeholder={
+          anchorTitle
+            ? `What happens after “${anchorTitle}”?`
+            : "Describe the next step in plain words"
+        }
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            if (onSubmit(text)) setText("");
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          }
+          event.stopPropagation();
+        }}
+      />
+      <span className="quick-add-hint">
+        {anchorTitle
+          ? `Enter adds it after “${anchorTitle}” and keeps going · Esc closes`
+          : "Enter adds it · select a step first to chain · Esc closes"}
+      </span>
+    </div>
+  );
 }
 
 function ToolButton({
