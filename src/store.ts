@@ -311,6 +311,7 @@ type OpenGraphState = {
   ) => GraphSnapshot;
   setNodesLive: (nodes: GraphNode[]) => void;
   setEdgesLive: (edges: GraphEdge[]) => void;
+  setViewportLive: (viewport: GraphDocument["viewport"]) => void;
   updateViewport: (viewport: GraphDocument["viewport"]) => void;
   setSelected: (selected: OpenGraphState["selected"]) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -409,6 +410,27 @@ export const useOpenGraphStore = create<OpenGraphState>((set, get) => ({
       document: { ...state.document, edges },
       transientBefore: state.transientBefore ?? cloneDocument(state.document),
     })),
+  setViewportLive: (viewport) =>
+    set((state) => {
+      if (
+        state.document.viewport.x === viewport.x &&
+        state.document.viewport.y === viewport.y &&
+        state.document.viewport.zoom === viewport.zoom
+      )
+        return state;
+      const document = { ...state.document, viewport };
+      const graphs = state.graphs.map((graph) =>
+        graph.id === state.activeGraphId ? { ...graph, document } : graph,
+      );
+      const saved =
+        persistDocument(document) &&
+        persistGraphLibrary(graphs, state.activeGraphId);
+      return {
+        document,
+        graphs,
+        saveStatus: saved ? "saved" : "error",
+      };
+    }),
   updateViewport: (viewport) => {
     get().transact((document) => ({ ...document, viewport }), "local");
   },

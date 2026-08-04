@@ -163,6 +163,9 @@ test.describe("OpenGraph", () => {
     await canvas.dblclick({ position: { x: 440, y: 480 } });
     await expect(page.locator(".react-flow__node-workflow")).toHaveCount(3);
     await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+    const beforePositions = await page.locator(".react-flow__node-workflow").evaluateAll(
+      (elements) => elements.map((element) => (element as HTMLElement).style.transform),
+    );
 
     await page.getByRole("button", { name: "Organize" }).click();
 
@@ -176,9 +179,36 @@ test.describe("OpenGraph", () => {
     expect(organizedPositions).toHaveLength(3);
     expect(new Set(organizedPositions).size).toBe(3);
 
-    await page.getByRole("status").getByRole("button", { name: "Undo" }).click();
+    await page.waitForTimeout(700);
+    await page.keyboard.press("Control+z");
     await expect(page.locator(".react-flow__edge")).toHaveCount(0);
-    await expect(page.getByRole("status")).toContainText("Graph organization undone");
+    await expect.poll(() =>
+      page.locator(".react-flow__node-workflow").evaluateAll(
+        (elements) => elements.map((element) => (element as HTMLElement).style.transform),
+      ),
+    ).toEqual(beforePositions);
+    await expect.poll(() =>
+      page.locator(".react-flow__node-workflow").evaluateAll((elements) =>
+        elements.filter((element) => {
+          const box = element.getBoundingClientRect();
+          return (
+            box.right > 0 &&
+            box.bottom > 80 &&
+            box.left < window.innerWidth &&
+            box.top < window.innerHeight
+          );
+        }).length,
+      ),
+    ).toBe(3);
+
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+
+    await page.setViewportSize({ width: 700, height: 760 });
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Redo", exact: true })).toBeVisible();
   });
 
   test("starts a blank graph from a canvas double-click", async ({ page }) => {

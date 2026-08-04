@@ -229,6 +229,7 @@ function App() {
     commit,
     setNodesLive,
     setEdgesLive,
+    setViewportLive,
     updateViewport,
     setSelected,
     setSettingsOpen,
@@ -251,7 +252,7 @@ function App() {
     archiveGraph,
     restoreGraph,
   } = useOpenGraphStore();
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow();
   const canvasRef = useRef<HTMLDivElement>(null);
   const companionRef = useRef<CompanionBridge | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -282,6 +283,35 @@ function App() {
     selected?.kind === "edge"
       ? document.edges.find((edge) => edge.id === selected.id)
       : undefined;
+
+  const restoreHistoryViewport = useCallback(() => {
+    skipViewportCommitUntilRef.current = Date.now() + 500;
+    window.requestAnimationFrame(() => {
+      const viewport = useOpenGraphStore.getState().document.viewport;
+      void setViewport(viewport, { duration: 200 });
+    });
+  }, [setViewport]);
+
+  const handleUndo = useCallback(
+    (message = "Change undone") => {
+      if (!useOpenGraphStore.getState().past.length) return;
+      undo();
+      setOrganizationRevision(null);
+      setOrganizationToast(null);
+      setToast(message);
+      restoreHistoryViewport();
+    },
+    [restoreHistoryViewport, setToast, undo],
+  );
+
+  const handleRedo = useCallback(() => {
+    if (!useOpenGraphStore.getState().future.length) return;
+    redo();
+    setOrganizationRevision(null);
+    setOrganizationToast(null);
+    setToast("Change redone");
+    restoreHistoryViewport();
+  }, [redo, restoreHistoryViewport, setToast]);
 
   useEffect(() => {
     (
@@ -360,6 +390,7 @@ function App() {
   }, [appearance]);
   useEffect(() => {
     const fitOnNarrow = () => {
+      skipViewportCommitUntilRef.current = Date.now() + 250;
       const frame = window.requestAnimationFrame(() =>
         fitView({
           padding: window.innerWidth <= 800 ? 0.18 : 0.14,
@@ -397,11 +428,11 @@ function App() {
       }
       if (command && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        event.shiftKey ? redo() : undo();
+        event.shiftKey ? handleRedo() : handleUndo();
       }
       if (command && event.key.toLowerCase() === "y") {
         event.preventDefault();
-        redo();
+        handleRedo();
       }
       if (command && event.key.toLowerCase() === "d") {
         event.preventDefault();
@@ -422,10 +453,10 @@ function App() {
     createGraph,
     deleteSelected,
     duplicateSelected,
-    redo,
+    handleRedo,
+    handleUndo,
     setActiveTool,
     setSelected,
-    undo,
   ]);
   const onNodesChange = useCallback(
     (changes: NodeChange<GraphNode>[]) => {
@@ -646,6 +677,7 @@ function App() {
   };
   const fit = () => fitView({ padding: 0.18, duration: 200 });
   const organize = useCallback(() => {
+    setViewportLive(getViewport());
     const current = useOpenGraphStore.getState().document;
     const result = organizeGraphDocument(current);
     if (result.document === current) {
@@ -666,7 +698,7 @@ function App() {
     window.requestAnimationFrame(() =>
       fitView({ padding: 0.18, duration: 200 }),
     );
-  }, [commit, fitView, setSelected, setToast]);
+  }, [commit, fitView, getViewport, setSelected, setToast, setViewportLive]);
   const activeGraphs = useMemo(
     () => graphs.filter((graph) => !graph.archived),
     [graphs],
@@ -819,10 +851,10 @@ function App() {
           <span>Organize</span>
         </button>
         <div className="history-actions">
-          <IconButton label="Undo" onClick={undo} disabled={!past.length}>
+          <IconButton label="Undo" onClick={() => handleUndo()} disabled={!past.length}>
             <Icon name="undo" />
           </IconButton>
-          <IconButton label="Redo" onClick={redo} disabled={!future.length}>
+          <IconButton label="Redo" onClick={handleRedo} disabled={!future.length}>
             <Icon name="redo" />
           </IconButton>
         </div>
@@ -846,9 +878,10 @@ function App() {
           className="primary-button"
           onClick={handleCopy}
           disabled={copying}
+          aria-label={copying ? "Preparing graph" : "Copy graph"}
         >
           <Icon name="copy" size={16} />
-          {copying ? "Preparing…" : "Copy graph"}
+          <span>{copying ? "Preparing…" : "Copy graph"}</span>
         </button>
         <button
           className="model-settings-button"
@@ -1113,6 +1146,7 @@ function App() {
             }}
             onMoveEnd={(_event, viewport) => {
               if (Date.now() < skipViewportCommitUntilRef.current) {
+                setViewportLive(viewport);
                 return;
               }
               updateViewport(viewport);
@@ -1231,10 +1265,7 @@ function App() {
             <button
               className="toast-action"
               onClick={() => {
-                undo();
-                setOrganizationRevision(null);
-                setOrganizationToast(null);
-                setToast("Graph organization undone");
+                handleUndo("Graph organization undone");
               }}
             >
               Undo

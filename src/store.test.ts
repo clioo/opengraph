@@ -133,6 +133,13 @@ describe("OpenGraph store", () => {
     store.setAppearance("dark");
     store.setToast("Saved");
     store.setSelected(null);
+    store.setViewportLive({ x: 25, y: 35, zoom: 1.1 });
+    expect(useOpenGraphStore.getState().document.viewport).toEqual({
+      x: 25,
+      y: 35,
+      zoom: 1.1,
+    });
+    expect(store.canUndo()).toBe(false);
     expect(useOpenGraphStore.getState()).toMatchObject({
       settingsOpen: true,
       activeTool: "connect",
