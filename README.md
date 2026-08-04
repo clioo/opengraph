@@ -100,3 +100,7 @@ Production uses `www.opengraph.work` as its canonical hostname. Squarespace DNS 
 - html-to-image
 - `@modelcontextprotocol/sdk` v1.29.0, Zod, and ws for the optional local companion
 - Vitest and Playwright
+
+## License
+
+OpenGraph is available under the [MIT License](LICENSE).
