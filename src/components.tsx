@@ -1,10 +1,11 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getSmoothStepPath,
   Handle,
   Position,
+  type ConnectionLineComponentProps,
   type EdgeProps,
   type NodeProps,
 } from "@xyflow/react";
@@ -304,3 +305,56 @@ export const WorkflowEdge = memo(
     );
   },
 );
+
+// Delay the drag-out connection preview slightly so an accidental press on a
+// handle does not flash a stray line. Once the delay passes the preview
+// follows the pointer with the same smooth-step styling as committed edges.
+const CONNECTION_PREVIEW_DELAY_MS = 300;
+
+export const DelayedConnectionLine = ({
+  fromX,
+  fromY,
+  toX,
+  toY,
+  fromPosition,
+  toPosition,
+}: ConnectionLineComponentProps) => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setVisible(true),
+      CONNECTION_PREVIEW_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (!visible) return null;
+  const [path] = getSmoothStepPath({
+    sourceX: fromX,
+    sourceY: fromY,
+    targetX: toX,
+    targetY: toY,
+    sourcePosition: fromPosition,
+    targetPosition: toPosition,
+    borderRadius: 4,
+    offset: 28,
+  });
+  return (
+    <g>
+      <path
+        d={path}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1.8}
+        strokeDasharray="6 4"
+      />
+      <circle
+        cx={toX}
+        cy={toY}
+        r={4}
+        fill="var(--surface)"
+        stroke="var(--accent)"
+        strokeWidth={1.8}
+      />
+    </g>
+  );
+};

@@ -15,13 +15,19 @@ import {
   type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AnnotationNode, WorkflowEdge, WorkflowNode } from "./components";
+import {
+  AnnotationNode,
+  DelayedConnectionLine,
+  WorkflowEdge,
+  WorkflowNode,
+} from "./components";
 import {
   createAnnotationNode,
   createEdge,
   createWorkflowNode,
   getModelOptions,
   getReasoningOptions,
+  hasEquivalentEdge,
   selectNodeModel,
   toggleEdgeDirection,
 } from "./graphUtils";
@@ -496,6 +502,16 @@ function App() {
     (connection: Connection) => addEdgeFromConnection(connection),
     [addEdgeFromConnection],
   );
+  const isValidConnection = useCallback(
+    (connection: Connection | GraphEdge) =>
+      !hasEquivalentEdge(document.edges, {
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
+      }),
+    [document.edges],
+  );
   const beginConnectionFromNode = useCallback(
     (nodeId: string) => {
       setConnectSource(nodeId);
@@ -600,10 +616,19 @@ function App() {
           setToast("Source selected — choose a destination node");
           return;
         }
-        addEdgeFromConnection({ source: connectSource, target: node.id });
+        const added = addEdgeFromConnection({
+          source: connectSource,
+          target: node.id,
+        });
         setConnectSource(null);
         setActiveTool("select");
-        setToast(connectSource === node.id ? "Loop added" : "Connection added");
+        setToast(
+          !added
+            ? "These nodes are already connected"
+            : connectSource === node.id
+              ? "Loop added"
+              : "Connection added",
+        );
         return;
       }
       setSelected({ id: node.id, kind: "node" });
@@ -1130,6 +1155,11 @@ function App() {
             panOnDrag
             zoomOnScroll={false}
             zoomOnPinch
+            snapToGrid
+            snapGrid={[12, 12]}
+            connectionRadius={60}
+            isValidConnection={isValidConnection}
+            connectionLineComponent={DelayedConnectionLine}
             defaultViewport={document.viewport}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

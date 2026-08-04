@@ -11,6 +11,7 @@ import {
   getExportBounds,
   getModelOptions,
   getReasoningOptions,
+  hasEquivalentEdge,
   normalizeDocument,
   resolvedNodeSettings,
   sanitizeDocument,
@@ -92,6 +93,33 @@ describe("graph utilities", () => {
     expect(
       createEdge({ source: "a", target: "a" }, "directed").data?.direction,
     ).toBe("loop");
+  });
+
+  it("detects equivalent edges across default handles, directions, and loops", () => {
+    const edges = [
+      createEdge({ source: "a", target: "b" }),
+      createEdge({ source: "c", target: "c" }),
+    ];
+    expect(hasEquivalentEdge(edges, { source: "a", target: "b" })).toBe(true);
+    expect(
+      hasEquivalentEdge(edges, {
+        source: "a",
+        target: "b",
+        sourceHandle: "source-right",
+        targetHandle: "target-left",
+      }),
+    ).toBe(true);
+    expect(hasEquivalentEdge(edges, { source: "b", target: "a" })).toBe(false);
+    expect(
+      hasEquivalentEdge(edges, {
+        source: "a",
+        target: "b",
+        sourceHandle: "source-bottom",
+        targetHandle: "target-top",
+      }),
+    ).toBe(false);
+    expect(hasEquivalentEdge(edges, { source: "c", target: "c" })).toBe(true);
+    expect(hasEquivalentEdge(edges, { source: "a", target: "c" })).toBe(false);
   });
 
   it("resolves workflow overrides and ignores annotation settings", () => {

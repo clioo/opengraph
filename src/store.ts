@@ -6,6 +6,7 @@ import {
   createEdge,
   createWorkflowNode,
   DEFAULT_MODELS,
+  hasEquivalentEdge,
   makeId,
   normalizeDocument,
   sanitizeDocument,
@@ -324,7 +325,7 @@ type OpenGraphState = {
     target: string;
     sourceHandle?: string | null;
     targetHandle?: string | null;
-  }) => void;
+  }) => boolean;
   deleteSelected: () => void;
   duplicateSelected: () => void;
   undo: () => void;
@@ -446,7 +447,8 @@ export const useOpenGraphStore = create<OpenGraphState>((set, get) => ({
         : node
       return { ...document, nodes: [...document.nodes, nextNode] }
     }),
-  addEdgeFromConnection: (connection) =>
+  addEdgeFromConnection: (connection) => {
+    if (hasEquivalentEdge(get().document.edges, connection)) return false;
     get().commit((document) => {
       const direction: EdgeDirection =
         connection.source === connection.target ? "loop" : "directed";
@@ -454,7 +456,9 @@ export const useOpenGraphStore = create<OpenGraphState>((set, get) => ({
         ...document,
         edges: [...document.edges, createEdge(connection, direction)],
       };
-    }),
+    });
+    return true;
+  },
   deleteSelected: () => {
     const selection = get().selected;
     if (!selection) return;
