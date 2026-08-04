@@ -215,6 +215,26 @@ select:focus-visible,
   display: flex;
   gap: 2px;
 }
+.organize-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+.organize-button:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-strong);
+}
+.organize-button:active {
+  transform: translateY(1px);
+}
 .icon-button {
   width: 44px;
   min-width: 44px;
@@ -1176,6 +1196,16 @@ select:focus-visible,
   .graph-name-wrap,
   .history-actions,
   .appearance-switch {
+    display: none;
+  }
+  .organize-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+  .organize-button span {
     display: none;
   }
   .graph-sidebar {

@@ -38,6 +38,7 @@ import type {
 } from "./types";
 import { modelColor, modelLabel, reasoningLabel } from "./types";
 import { MODEL_CATALOG, PROVIDERS, inferredProvider, modelsForProviders, providerName } from './modelCatalog'
+import { organizeGraphDocument } from "./organize";
 
 const groupModels = (models: ModelDefinition[]) => models.reduce<Record<string, ModelDefinition[]>>((groups, model) => {
   const provider = inferredProvider(model)
@@ -107,7 +108,8 @@ function Icon({
     | "folder"
     | "plus"
     | "archive"
-    | "restore";
+    | "restore"
+    | "organize";
   size?: number;
 }) {
   const paths = {
@@ -181,6 +183,14 @@ function Icon({
       <>
         <path d="M4 7h16v12H4zM3 4h18v3H3z" />
         <path d="m10 13 2-2 2 2m-2-2v5" />
+      </>
+    ),
+    organize: (
+      <>
+        <rect x="4" y="5" width="5" height="5" rx="1" />
+        <rect x="15" y="5" width="5" height="5" rx="1" />
+        <rect x="15" y="15" width="5" height="5" rx="1" />
+        <path d="M9 7.5h4M12 7.5v10h3" />
       </>
     ),
   }[name];
@@ -259,6 +269,9 @@ function App() {
   const [editingGraphName, setEditingGraphName] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('opengraph.onboarding.v1') !== 'done');
   const [onboardingProviders, setOnboardingProviders] = useState<ProviderId[]>(['codex']);
+  const [organizationRevision, setOrganizationRevision] = useState<number | null>(null);
+  const [organizationToast, setOrganizationToast] = useState<string | null>(null);
+  const skipViewportCommitUntilRef = useRef(0);
   const graphRenameCancelledRef = useRef(false);
   const graphSearchRef = useRef<HTMLInputElement>(null);
   const selectedNode =
@@ -632,6 +645,28 @@ function App() {
     }
   };
   const fit = () => fitView({ padding: 0.18, duration: 200 });
+  const organize = useCallback(() => {
+    const current = useOpenGraphStore.getState().document;
+    const result = organizeGraphDocument(current);
+    if (result.document === current) {
+      setOrganizationRevision(null);
+      setOrganizationToast(null);
+      setToast("Add a workflow node before organizing the graph");
+      return;
+    }
+    commit(() => result.document);
+    setSelected(null);
+    setOrganizationRevision(useOpenGraphStore.getState().revision);
+    const message = result.connectionsAdded
+      ? `${result.connectionsAdded} connection${result.connectionsAdded === 1 ? "" : "s"} added · graph organized`
+      : "Graph organized · connections preserved";
+    setOrganizationToast(message);
+    setToast(message);
+    skipViewportCommitUntilRef.current = Date.now() + 500;
+    window.requestAnimationFrame(() =>
+      fitView({ padding: 0.18, duration: 200 }),
+    );
+  }, [commit, fitView, setSelected, setToast]);
   const activeGraphs = useMemo(
     () => graphs.filter((graph) => !graph.archived),
     [graphs],
@@ -779,6 +814,10 @@ function App() {
           )}
         </div>
         <div className="topbar-spacer" />
+        <button className="organize-button" onClick={organize}>
+          <Icon name="organize" size={17} />
+          <span>Organize</span>
+        </button>
         <div className="history-actions">
           <IconButton label="Undo" onClick={undo} disabled={!past.length}>
             <Icon name="undo" />
@@ -1072,7 +1111,12 @@ function App() {
               if (activeTool !== "select") setActiveTool("select");
               setSelected(null);
             }}
-            onMoveEnd={(_event, viewport) => updateViewport(viewport)}
+            onMoveEnd={(_event, viewport) => {
+              if (Date.now() < skipViewportCommitUntilRef.current) {
+                return;
+              }
+              updateViewport(viewport);
+            }}
             connectionMode={ConnectionMode.Loose}
             selectNodesOnDrag={activeTool === "select"}
             elevateNodesOnSelect
@@ -1183,12 +1227,26 @@ function App() {
               Download PNG
             </button>
           )}
+          {organizationRevision === revision && toast === organizationToast && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                undo();
+                setOrganizationRevision(null);
+                setOrganizationToast(null);
+                setToast("Graph organization undone");
+              }}
+            >
+              Undo
+            </button>
+          )}
           <button
             aria-label="Dismiss notification"
-            onClick={() => {
-              setPendingExport(null);
-              setToast(null);
-            }}
+              onClick={() => {
+                setPendingExport(null);
+                setOrganizationToast(null);
+                setToast(null);
+              }}
           >
             ×
           </button>
