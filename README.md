@@ -25,6 +25,7 @@ Open the local URL shown by Vite.
 - Open model settings to enable models and choose global defaults.
 - Let nodes inherit defaults or override model and reasoning individually.
 - Use `Cmd/Ctrl + Z` and `Cmd/Ctrl + Shift + Z` for undo and redo.
+- Press **Organize** to connect disconnected workflow groups in outline order and lay out the graph; one undo restores both links and positions.
 - Select an item and press `Delete`; use `Cmd/Ctrl + D` to duplicate a node.
 - Press **Copy graph** to copy a clean PNG. If image clipboard access is unavailable, OpenGraph offers an explicit download.
 

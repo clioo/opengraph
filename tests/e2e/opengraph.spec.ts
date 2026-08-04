@@ -153,6 +153,34 @@ test.describe("OpenGraph", () => {
     await expect(inspector.getByLabel("Node model")).toHaveValue("codex/gpt-5.6-sol");
   });
 
+  test("organizes disconnected nodes as one undoable transaction", async ({ page }) => {
+    await page.getByRole("button", { name: "New graph", exact: true }).click();
+    const canvas = page.locator(".canvas-shell");
+    await canvas.dblclick({ position: { x: 180, y: 150 } });
+    await page.keyboard.press("Escape");
+    await canvas.dblclick({ position: { x: 700, y: 150 } });
+    await page.keyboard.press("Escape");
+    await canvas.dblclick({ position: { x: 440, y: 480 } });
+    await expect(page.locator(".react-flow__node-workflow")).toHaveCount(3);
+    await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Organize" }).click();
+
+    await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+    await expect(page.getByRole("status")).toContainText(
+      "2 connections added · graph organized",
+    );
+    const organizedPositions = await page.locator(".react-flow__node-workflow").evaluateAll(
+      (elements) => elements.map((element) => (element as HTMLElement).style.transform),
+    );
+    expect(organizedPositions).toHaveLength(3);
+    expect(new Set(organizedPositions).size).toBe(3);
+
+    await page.getByRole("status").getByRole("button", { name: "Undo" }).click();
+    await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText("Graph organization undone");
+  });
+
   test("starts a blank graph from a canvas double-click", async ({ page }) => {
     await page.getByRole("button", { name: "New graph", exact: true }).click();
     const canvas = page.locator(".canvas-shell");
