@@ -1194,7 +1194,6 @@ select:focus-visible,
   }
   .brand-divider,
   .graph-name-wrap,
-  .history-actions,
   .appearance-switch {
     display: none;
   }
@@ -1230,8 +1229,14 @@ select:focus-visible,
     display: none;
   }
   .primary-button {
-    padding: 0 12px;
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
     margin-left: auto;
+  }
+  .primary-button span {
+    display: none;
   }
   .model-settings-button {
     width: 44px;
@@ -1290,6 +1295,23 @@ select:focus-visible,
   .toast > :nth-child(2) {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 500px) {
+  .brand-mark,
+  .history-actions .icon-button:last-child,
+  .appearance-switch {
+    display: none;
+  }
+  .brand-lockup {
+    gap: 0;
+  }
+}
+
+@media (max-width: 340px) {
+  .brand-lockup {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
