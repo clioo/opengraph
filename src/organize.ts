@@ -6,6 +6,23 @@ type OrganizeResult = {
   connectionsAdded: number;
 };
 
+type LayoutDirection = "horizontal" | "vertical";
+
+type ComponentLayout = {
+  index: number;
+  nodes: GraphNode[];
+  level: number;
+  width: number;
+  height: number;
+};
+
+const MARGIN = 48;
+const COLUMN_GAP = 112;
+const ROW_GAP = 88;
+const SIBLING_GAP = 48;
+const CYCLE_GAP = 80;
+const NOTE_GAP = 56;
+
 const nodeWidth = (node: GraphNode) =>
   node.measured?.width ?? node.width ?? (node.type === "workflow" ? 320 : 260);
 
@@ -45,14 +62,7 @@ const connectComponentsInOutlineOrder = (
     const previous = nodes[index - 1];
     const current = nodes[index];
     if (find(previous.id) === find(current.id)) continue;
-    additions.push(
-      createEdge({
-        source: previous.id,
-        target: current.id,
-        sourceHandle: "source-right",
-        targetHandle: "target-left",
-      }),
-    );
+    additions.push(createEdge({ source: previous.id, target: current.id }));
     union(previous.id, current.id);
   }
   return additions;
@@ -109,16 +119,17 @@ const stronglyConnectedComponents = (nodes: GraphNode[], edges: GraphEdge[]) => 
   return components;
 };
 
-const layoutWorkflowNodes = (nodes: GraphNode[], edges: GraphEdge[]) => {
-  if (!nodes.length) return nodes;
-  const components = stronglyConnectedComponents(nodes, edges);
+const componentGraph = (nodes: GraphNode[], edges: GraphEdge[]) => {
+  const outlineOrder = new Map(nodes.map((node, index) => [node.id, index]));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const componentIds = stronglyConnectedComponents(nodes, edges);
   const componentOf = new Map<string, number>();
-  components.forEach((component, index) =>
-    component.forEach((nodeId) => componentOf.set(nodeId, index)),
+  componentIds.forEach((component, index) =>
+    component.forEach((id) => componentOf.set(id, index)),
   );
 
-  const incoming = components.map(() => new Set<number>());
-  const outgoing = components.map(() => new Set<number>());
+  const incoming = componentIds.map(() => new Set<number>());
+  const outgoing = componentIds.map(() => new Set<number>());
   edges.forEach((edge) => {
     const source = componentOf.get(edge.source);
     const target = componentOf.get(edge.target);
@@ -127,18 +138,16 @@ const layoutWorkflowNodes = (nodes: GraphNode[], edges: GraphEdge[]) => {
     incoming[target].add(source);
   });
 
-  const componentOrder = components
-    .map((component, index) => ({
+  const outlineComponents = componentIds
+    .map((ids, index) => ({
       index,
-      outlineIndex: Math.min(
-        ...component.map((id) => nodes.findIndex((node) => node.id === id)),
-      ),
+      outlineIndex: Math.min(...ids.map((id) => outlineOrder.get(id) ?? 0)),
     }))
     .sort((left, right) => left.outlineIndex - right.outlineIndex);
-  const queue = componentOrder
+  const queue = outlineComponents
     .filter(({ index }) => incoming[index].size === 0)
     .map(({ index }) => index);
-  const levels = components.map(() => 0);
+  const levels = componentIds.map(() => 0);
   const remainingIncoming = incoming.map((sources) => new Set(sources));
 
   while (queue.length) {
@@ -150,47 +159,261 @@ const layoutWorkflowNodes = (nodes: GraphNode[], edges: GraphEdge[]) => {
     }
   }
 
-  const levelsToNodes = new Map<number, GraphNode[]>();
-  nodes.forEach((node) => {
-    const level = levels[componentOf.get(node.id)!];
-    levelsToNodes.set(level, [...(levelsToNodes.get(level) ?? []), node]);
+  const components: ComponentLayout[] = componentIds.map((ids, index) => {
+    const componentNodes = ids.map((id) => nodeById.get(id)!);
+    return {
+      index,
+      nodes: componentNodes,
+      level: levels[index],
+      width:
+        componentNodes.reduce((width, node) => width + nodeWidth(node), 0) +
+        Math.max(0, componentNodes.length - 1) * CYCLE_GAP,
+      height: Math.max(...componentNodes.map(nodeHeight)),
+    };
   });
 
-  const margin = 48;
-  const gapX = 120;
-  const gapY = 56;
-  const maxColumnHeight = Math.max(
-    ...[...levelsToNodes.values()].map((column) =>
-      column.reduce((height, node) => height + nodeHeight(node), 0) +
-      Math.max(0, column.length - 1) * gapY,
-    ),
-  );
-  const maxLevel = Math.max(...levelsToNodes.keys());
-  const columnWidths = Array.from({ length: maxLevel + 1 }, (_, level) =>
-    Math.max(...(levelsToNodes.get(level) ?? []).map(nodeWidth), 320),
-  );
-  const columnX: number[] = [];
-  columnWidths.forEach((width, level) => {
-    columnX[level] =
-      level === 0
-        ? margin
-        : columnX[level - 1] + columnWidths[level - 1] + gapX;
-  });
-
-  const positions = new Map<string, { x: number; y: number }>();
-  levelsToNodes.forEach((column, level) => {
-    const columnHeight =
-      column.reduce((height, node) => height + nodeHeight(node), 0) +
-      Math.max(0, column.length - 1) * gapY;
-    let y = margin + (maxColumnHeight - columnHeight) / 2;
-    column.forEach((node) => {
-      positions.set(node.id, { x: columnX[level], y });
-      y += nodeHeight(node) + gapY;
-    });
-  });
-
-  return nodes.map((node) => ({ ...node, position: positions.get(node.id)! }));
+  return { components, componentOf };
 };
+
+const chooseDirection = (components: ComponentLayout[]): LayoutDirection => {
+  const maxLevel = Math.max(...components.map((component) => component.level));
+  const largestCycle = Math.max(...components.map((component) => component.nodes.length));
+  const counts = new Map<number, number>();
+  components.forEach((component) =>
+    counts.set(component.level, (counts.get(component.level) ?? 0) + 1),
+  );
+  const widestLevel = Math.max(...counts.values());
+
+  // Cycles read best as a compact horizontal loop fed from above. Long,
+  // mostly-linear workflows also fit common screens better top-to-bottom.
+  return largestCycle >= 3 || (maxLevel >= 4 && widestLevel <= 2)
+    ? "vertical"
+    : "horizontal";
+};
+
+const layoutWorkflowNodes = (nodes: GraphNode[], edges: GraphEdge[]) => {
+  const { components, componentOf } = componentGraph(nodes, edges);
+  const direction = chooseDirection(components);
+  const levels = new Map<number, ComponentLayout[]>();
+  components
+    .sort(
+      (left, right) =>
+        Math.min(...left.nodes.map((node) => nodes.indexOf(node))) -
+        Math.min(...right.nodes.map((node) => nodes.indexOf(node))),
+    )
+    .forEach((component) =>
+      levels.set(component.level, [...(levels.get(component.level) ?? []), component]),
+    );
+
+  const maxLevel = Math.max(...levels.keys());
+  const positions = new Map<string, { x: number; y: number }>();
+
+  const placeComponent = (component: ComponentLayout, x: number, y: number) => {
+    let memberX = x;
+    component.nodes.forEach((node) => {
+      positions.set(node.id, {
+        x: memberX,
+        y: y + (component.height - nodeHeight(node)) / 2,
+      });
+      memberX += nodeWidth(node) + CYCLE_GAP;
+    });
+  };
+
+  if (direction === "vertical") {
+    const rowWidths = Array.from({ length: maxLevel + 1 }, (_, level) => {
+      const row = levels.get(level) ?? [];
+      return (
+        row.reduce((width, component) => width + component.width, 0) +
+        Math.max(0, row.length - 1) * SIBLING_GAP
+      );
+    });
+    const rowHeights = Array.from({ length: maxLevel + 1 }, (_, level) =>
+      Math.max(...(levels.get(level) ?? []).map((component) => component.height)),
+    );
+    const canvasWidth = Math.max(...rowWidths);
+    let y = MARGIN;
+    rowHeights.forEach((height, level) => {
+      let x = MARGIN + (canvasWidth - rowWidths[level]) / 2;
+      (levels.get(level) ?? []).forEach((component) => {
+        placeComponent(component, x, y);
+        x += component.width + SIBLING_GAP;
+      });
+      y += height + ROW_GAP;
+    });
+  } else {
+    const columnWidths = Array.from({ length: maxLevel + 1 }, (_, level) =>
+      Math.max(...(levels.get(level) ?? []).map((component) => component.width)),
+    );
+    const columnHeights = Array.from({ length: maxLevel + 1 }, (_, level) => {
+      const column = levels.get(level) ?? [];
+      return (
+        column.reduce((height, component) => height + component.height, 0) +
+        Math.max(0, column.length - 1) * SIBLING_GAP
+      );
+    });
+    const canvasHeight = Math.max(...columnHeights);
+    let x = MARGIN;
+    columnWidths.forEach((width, level) => {
+      let y = MARGIN + (canvasHeight - columnHeights[level]) / 2;
+      (levels.get(level) ?? []).forEach((component) => {
+        placeComponent(component, x, y);
+        y += component.height + SIBLING_GAP;
+      });
+      x += width + COLUMN_GAP;
+    });
+  }
+
+  return {
+    direction,
+    components,
+    componentOf,
+    nodes: nodes.map((node) => ({ ...node, position: positions.get(node.id)! })),
+  };
+};
+
+const squaredDistance = (
+  left: { x: number; y: number },
+  right: { x: number; y: number },
+) => (left.x - right.x) ** 2 + (left.y - right.y) ** 2;
+
+const center = (node: GraphNode) => ({
+  x: node.position.x + nodeWidth(node) / 2,
+  y: node.position.y + nodeHeight(node) / 2,
+});
+
+const overlaps = (left: GraphNode, right: GraphNode, padding = 20) =>
+  left.position.x < right.position.x + nodeWidth(right) + padding &&
+  left.position.x + nodeWidth(left) + padding > right.position.x &&
+  left.position.y < right.position.y + nodeHeight(right) + padding &&
+  left.position.y + nodeHeight(left) + padding > right.position.y;
+
+const layoutAnnotations = (
+  annotations: GraphNode[],
+  originalWorkflowNodes: GraphNode[],
+  positionedWorkflowNodes: GraphNode[],
+) => {
+  if (!annotations.length) return annotations;
+  const positionedById = new Map(
+    positionedWorkflowNodes.map((node) => [node.id, node]),
+  );
+  const occupied = [...positionedWorkflowNodes];
+
+  return annotations.map((note) => {
+    const noteCenter = center(note);
+    const anchor = originalWorkflowNodes.reduce((nearest, candidate) =>
+      squaredDistance(noteCenter, center(candidate)) <
+      squaredDistance(noteCenter, center(nearest))
+        ? candidate
+        : nearest,
+    );
+    const positionedAnchor = positionedById.get(anchor.id)!;
+    const delta = {
+      x: noteCenter.x - center(anchor).x,
+      y: noteCenter.y - center(anchor).y,
+    };
+    const horizontalFirst = Math.abs(delta.x) > Math.abs(delta.y);
+    const preferredSides = horizontalFirst
+      ? [delta.x < 0 ? "left" : "right", delta.y < 0 ? "top" : "bottom"]
+      : [delta.y < 0 ? "top" : "bottom", delta.x < 0 ? "left" : "right"];
+    const sides = [
+      ...preferredSides,
+      "top",
+      "right",
+      "bottom",
+      "left",
+    ].filter((side, index, all) => all.indexOf(side) === index);
+
+    const candidateFor = (side: string): GraphNode => ({
+      ...note,
+      position:
+        side === "top"
+          ? {
+              x:
+                positionedAnchor.position.x +
+                (nodeWidth(positionedAnchor) - nodeWidth(note)) / 2,
+              y: positionedAnchor.position.y - nodeHeight(note) - NOTE_GAP,
+            }
+          : side === "bottom"
+            ? {
+                x:
+                  positionedAnchor.position.x +
+                  (nodeWidth(positionedAnchor) - nodeWidth(note)) / 2,
+                y:
+                  positionedAnchor.position.y +
+                  nodeHeight(positionedAnchor) +
+                  NOTE_GAP,
+              }
+            : side === "left"
+              ? {
+                  x: positionedAnchor.position.x - nodeWidth(note) - NOTE_GAP,
+                  y:
+                    positionedAnchor.position.y +
+                    (nodeHeight(positionedAnchor) - nodeHeight(note)) / 2,
+                }
+              : {
+                  x:
+                    positionedAnchor.position.x +
+                    nodeWidth(positionedAnchor) +
+                    NOTE_GAP,
+                  y:
+                    positionedAnchor.position.y +
+                    (nodeHeight(positionedAnchor) - nodeHeight(note)) / 2,
+                },
+    });
+
+    const positioned =
+      sides.map(candidateFor).find((candidate) =>
+        occupied.every((node) => !overlaps(candidate, node)),
+      ) ?? candidateFor("right");
+    occupied.push(positioned);
+    return positioned;
+  });
+};
+
+const normalizePositions = (nodes: GraphNode[]) => {
+  const minX = Math.min(...nodes.map((node) => node.position.x));
+  const minY = Math.min(...nodes.map((node) => node.position.y));
+  const shiftX = minX < MARGIN ? MARGIN - minX : 0;
+  const shiftY = minY < MARGIN ? MARGIN - minY : 0;
+  if (!shiftX && !shiftY) return nodes;
+  return nodes.map((node) => ({
+    ...node,
+    position: {
+      x: node.position.x + shiftX,
+      y: node.position.y + shiftY,
+    },
+  }));
+};
+
+const routeEdges = (
+  edges: GraphEdge[],
+  components: ComponentLayout[],
+  componentOf: Map<string, number>,
+  direction: LayoutDirection,
+) =>
+  edges.map((edge) => {
+    if (edge.source === edge.target) return edge;
+    const sourceComponent = componentOf.get(edge.source);
+    const targetComponent = componentOf.get(edge.target);
+    if (sourceComponent === undefined || targetComponent === undefined) return edge;
+
+    if (sourceComponent === targetComponent) {
+      const component = components.find(({ index }) => index === sourceComponent)!;
+      const sourceIndex = component.nodes.findIndex((node) => node.id === edge.source);
+      const targetIndex = component.nodes.findIndex((node) => node.id === edge.target);
+      return {
+        ...edge,
+        sourceHandle: targetIndex > sourceIndex ? "source-right" : "source-bottom",
+        targetHandle: targetIndex > sourceIndex ? "target-left" : "target-bottom",
+      };
+    }
+
+    return {
+      ...edge,
+      sourceHandle: direction === "horizontal" ? "source-right" : "source-bottom",
+      targetHandle: direction === "horizontal" ? "target-left" : "target-top",
+    };
+  });
 
 export const organizeGraphDocument = (document: GraphDocument): OrganizeResult => {
   const workflowNodes = document.nodes.filter((node) => node.type === "workflow");
@@ -199,16 +422,28 @@ export const organizeGraphDocument = (document: GraphDocument): OrganizeResult =
   const additions = connectComponentsInOutlineOrder(workflowNodes, document.edges);
   const edges = [...document.edges, ...additions];
   const relevantEdges = workflowEdges(workflowNodes, edges);
-  const positioned = layoutWorkflowNodes(workflowNodes, relevantEdges);
-  const positions = new Map(positioned.map((node) => [node.id, node.position]));
+  const layout = layoutWorkflowNodes(workflowNodes, relevantEdges);
+  const annotations = layoutAnnotations(
+    document.nodes.filter((node) => node.type === "annotation"),
+    workflowNodes,
+    layout.nodes,
+  );
+  const positionedNodes = normalizePositions([...layout.nodes, ...annotations]);
+  const positions = new Map(positionedNodes.map((node) => [node.id, node.position]));
 
   return {
     document: {
       ...document,
-      nodes: document.nodes.map((node) =>
-        positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node,
+      nodes: document.nodes.map((node) => ({
+        ...node,
+        position: positions.get(node.id) ?? node.position,
+      })),
+      edges: routeEdges(
+        edges,
+        layout.components,
+        layout.componentOf,
+        layout.direction,
       ),
-      edges,
     },
     connectionsAdded: additions.length,
   };

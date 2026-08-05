@@ -23,7 +23,7 @@ describe("graph organization", () => {
       target: third.id,
     });
     expect(result.document.nodes.map((node) => node.position.x)).toEqual([
-      48, 488, 928,
+      48, 480, 912,
     ]);
   });
 
@@ -48,7 +48,7 @@ describe("graph organization", () => {
     expect(result.document.nodes[1].position.y).toBeLessThan(result.document.nodes[2].position.y);
   });
 
-  it("keeps cycles together and leaves annotations where the user placed them", () => {
+  it("opens a short cycle into outline order and keeps its note nearby", () => {
     const first = createWorkflowNode({ x: 0, y: 0 }, "First");
     const second = createWorkflowNode({ x: 0, y: 0 }, "Second");
     const note = createAnnotationNode({ x: 777, y: 333 }, "Keep me here");
@@ -64,8 +64,82 @@ describe("graph organization", () => {
     const result = organizeGraphDocument(document);
 
     expect(result.connectionsAdded).toBe(0);
-    expect(result.document.nodes[0].position.x).toBe(result.document.nodes[2].position.x);
-    expect(result.document.nodes[1].position).toEqual({ x: 777, y: 333 });
+    expect(result.document.nodes[0].position.x).toBeLessThan(
+      result.document.nodes[2].position.x,
+    );
+    expect(
+      Math.abs(
+        result.document.nodes[1].position.x - result.document.nodes[0].position.x,
+      ),
+    ).toBeLessThan(100);
+    expect(result.document.nodes[1].position.y).toBeGreaterThan(
+      result.document.nodes[0].position.y,
+    );
+    expect(result.document.edges[0]).toMatchObject({
+      sourceHandle: "source-right",
+      targetHandle: "target-left",
+    });
+    expect(result.document.edges[1]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-bottom",
+    });
+  });
+
+  it("turns a long review loop into a readable vertical pipeline", () => {
+    const intake = createWorkflowNode({ x: 0, y: 0 }, "PR list");
+    const reviewer = createWorkflowNode({ x: 440, y: 0 }, "Reviewer");
+    const qa = createWorkflowNode({ x: 880, y: 0 }, "QA");
+    const analyzer = createWorkflowNode({ x: 1320, y: 0 }, "Analyzer");
+    const worker = createWorkflowNode({ x: 1760, y: 0 }, "Worker");
+    const note = createAnnotationNode({ x: 900, y: -180 }, "If QA fails");
+    const document = {
+      ...makeBlankDocument(),
+      nodes: [intake, reviewer, qa, note, analyzer, worker],
+      edges: [
+        createEdge({ source: intake.id, target: reviewer.id }),
+        createEdge({ source: reviewer.id, target: qa.id }),
+        createEdge({ source: qa.id, target: analyzer.id }),
+        createEdge({ source: analyzer.id, target: worker.id }),
+        createEdge({ source: worker.id, target: qa.id }),
+      ],
+    };
+
+    const result = organizeGraphDocument(document);
+    const [positionedIntake, positionedReviewer, positionedQa, positionedNote, positionedAnalyzer, positionedWorker] =
+      result.document.nodes;
+
+    expect([
+      positionedIntake,
+      positionedReviewer,
+      positionedQa,
+      positionedAnalyzer,
+      positionedWorker,
+    ].map((node) => node.position.x)).toEqual([448, 448, 48, 448, 848]);
+    expect([
+      positionedIntake,
+      positionedReviewer,
+      positionedQa,
+      positionedAnalyzer,
+      positionedWorker,
+    ].map((node) => node.position.y)).toEqual([48, 316, 584, 584, 584]);
+    expect(positionedNote.position.x).toBeGreaterThanOrEqual(positionedQa.position.x);
+    expect(positionedNote.position.y).toBeLessThan(positionedQa.position.y);
+    result.document.edges.slice(0, 2).forEach((edge) =>
+      expect(edge).toMatchObject({
+        sourceHandle: "source-bottom",
+        targetHandle: "target-top",
+      }),
+    );
+    result.document.edges.slice(2, 4).forEach((edge) =>
+      expect(edge).toMatchObject({
+        sourceHandle: "source-right",
+        targetHandle: "target-left",
+      }),
+    );
+    expect(result.document.edges[4]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-bottom",
+    });
   });
 
   it("returns annotation-only documents unchanged", () => {

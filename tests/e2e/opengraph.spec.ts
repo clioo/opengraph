@@ -211,6 +211,117 @@ test.describe("OpenGraph", () => {
     await expect(page.getByRole("button", { name: "Redo", exact: true })).toBeVisible();
   });
 
+  test("organizes a long PR review cycle as a compact vertical pipeline", async ({
+    page,
+  }, testInfo) => {
+    await page.evaluate((key) => {
+      const current = (
+        window as Window & {
+          __opengraphDocument?: Record<string, unknown>;
+        }
+      ).__opengraphDocument!;
+      const workflow = (id: string, title: string, x: number) => ({
+        id,
+        type: "workflow",
+        position: { x, y: 120 },
+        data: {
+          kind: "workflow",
+          title,
+          description: `Responsibilities for ${title}.`,
+          modelOverride: null,
+          reasoningOverride: null,
+        },
+      });
+      const edge = (id: string, source: string, target: string) => ({
+        id,
+        source,
+        target,
+        sourceHandle: "source-right",
+        targetHandle: "target-left",
+        type: "workflow",
+        data: { direction: "directed", label: "" },
+        animated: false,
+      });
+      const document = {
+        ...current,
+        name: "PR review loop",
+        nodes: [
+          workflow("intake", "PR list", 40),
+          workflow("reviewer", "Reviewer", 480),
+          workflow("qa", "QA Assurance", 920),
+          {
+            id: "qa-note",
+            type: "annotation",
+            position: { x: 940, y: -80 },
+            data: { kind: "annotation", text: "If QA fails, send it to Analyzer" },
+          },
+          workflow("analyzer", "Analyzer", 1360),
+          workflow("worker", "Worker", 1800),
+        ],
+        edges: [
+          edge("intake-reviewer", "intake", "reviewer"),
+          edge("reviewer-qa", "reviewer", "qa"),
+          edge("qa-analyzer", "qa", "analyzer"),
+          edge("analyzer-worker", "analyzer", "worker"),
+          edge("worker-qa", "worker", "qa"),
+        ],
+      };
+      localStorage.removeItem("opengraph.graph-library.v1");
+      localStorage.removeItem("opengraph.active-graph.v1");
+      localStorage.setItem(key, JSON.stringify(document));
+    }, storageKey);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Rename current graph" }),
+    ).toContainText("PR review loop");
+
+    await page.getByRole("button", { name: "Organize" }).click();
+
+    const graph = await page.evaluate(() =>
+      (window as Window & { __opengraphDocument?: any }).__opengraphDocument,
+    );
+    const node = (id: string) => graph.nodes.find((item: any) => item.id === id);
+    const intake = node("intake");
+    const reviewer = node("reviewer");
+    const qa = node("qa");
+    const analyzer = node("analyzer");
+    const worker = node("worker");
+    expect(intake.position.x).toBe(reviewer.position.x);
+    expect(intake.position.y).toBeLessThan(reviewer.position.y);
+    expect(reviewer.position.y).toBeLessThan(qa.position.y);
+    expect([qa.position.y, analyzer.position.y, worker.position.y]).toEqual([
+      qa.position.y,
+      qa.position.y,
+      qa.position.y,
+    ]);
+    expect(qa.position.x).toBeLessThan(analyzer.position.x);
+    expect(analyzer.position.x).toBeLessThan(worker.position.x);
+    graph.edges.slice(0, 2).forEach((edge: any) =>
+      expect(edge).toMatchObject({
+        sourceHandle: "source-bottom",
+        targetHandle: "target-top",
+      }),
+    );
+    graph.edges.slice(2, 4).forEach((edge: any) =>
+      expect(edge).toMatchObject({
+        sourceHandle: "source-right",
+        targetHandle: "target-left",
+      }),
+    );
+    expect(graph.edges[4]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-bottom",
+    });
+    const note = node("qa-note");
+    expect(note.position.y).toBeLessThan(qa.position.y);
+    expect(Math.abs(note.position.x - qa.position.x)).toBeLessThan(100);
+    await page.waitForTimeout(500);
+    await page.screenshot({
+      path: testInfo.outputPath("organized-pr-review-cycle.png"),
+      fullPage: true,
+    });
+  });
+
   test("starts a blank graph from a canvas double-click", async ({ page }) => {
     await page.getByRole("button", { name: "New graph", exact: true }).click();
     const canvas = page.locator(".canvas-shell");
