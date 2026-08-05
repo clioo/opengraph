@@ -100,7 +100,7 @@ describe("graph organization", () => {
         createEdge({ source: reviewer.id, target: qa.id }),
         createEdge({ source: qa.id, target: analyzer.id }),
         createEdge({ source: analyzer.id, target: worker.id }),
-        createEdge({ source: worker.id, target: qa.id }),
+        createEdge({ source: qa.id, target: worker.id }, "bidirectional"),
       ],
     };
 

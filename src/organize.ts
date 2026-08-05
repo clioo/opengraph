@@ -71,7 +71,11 @@ const connectComponentsInOutlineOrder = (
 const stronglyConnectedComponents = (nodes: GraphNode[], edges: GraphEdge[]) => {
   const order = new Map(nodes.map((node, index) => [node.id, index]));
   const adjacency = new Map(nodes.map((node) => [node.id, [] as string[]]));
-  edges.forEach((edge) => adjacency.get(edge.source)?.push(edge.target));
+  edges.forEach((edge) => {
+    adjacency.get(edge.source)?.push(edge.target);
+    if (edge.data?.direction === "bidirectional")
+      adjacency.get(edge.target)?.push(edge.source);
+  });
   adjacency.forEach((targets) =>
     targets.sort((left, right) => (order.get(left) ?? 0) - (order.get(right) ?? 0)),
   );
@@ -401,10 +405,12 @@ const routeEdges = (
       const component = components.find(({ index }) => index === sourceComponent)!;
       const sourceIndex = component.nodes.findIndex((node) => node.id === edge.source);
       const targetIndex = component.nodes.findIndex((node) => node.id === edge.target);
+      const feedback =
+        edge.data?.direction === "bidirectional" || targetIndex < sourceIndex;
       return {
         ...edge,
-        sourceHandle: targetIndex > sourceIndex ? "source-right" : "source-bottom",
-        targetHandle: targetIndex > sourceIndex ? "target-left" : "target-bottom",
+        sourceHandle: feedback ? "source-bottom" : "source-right",
+        targetHandle: feedback ? "target-bottom" : "target-left",
       };
     }
 
