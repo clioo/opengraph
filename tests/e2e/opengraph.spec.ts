@@ -232,14 +232,19 @@ test.describe("OpenGraph", () => {
           reasoningOverride: null,
         },
       });
-      const edge = (id: string, source: string, target: string) => ({
+      const edge = (
+        id: string,
+        source: string,
+        target: string,
+        direction = "directed",
+      ) => ({
         id,
         source,
         target,
         sourceHandle: "source-right",
         targetHandle: "target-left",
         type: "workflow",
-        data: { direction: "directed", label: "" },
+        data: { direction, label: "" },
         animated: false,
       });
       const document = {
@@ -263,7 +268,7 @@ test.describe("OpenGraph", () => {
           edge("reviewer-qa", "reviewer", "qa"),
           edge("qa-analyzer", "qa", "analyzer"),
           edge("analyzer-worker", "analyzer", "worker"),
-          edge("worker-qa", "worker", "qa"),
+          edge("qa-worker", "qa", "worker", "bidirectional"),
         ],
       };
       localStorage.removeItem("opengraph.graph-library.v1");
