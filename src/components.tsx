@@ -83,6 +83,13 @@ const HandleSet = ({ nodeId }: { nodeId: string }) => (
     />
     <Handle
       className="node-handle"
+      type="target"
+      position={Position.Bottom}
+      id="target-bottom"
+      style={{ left: "38%" }}
+    />
+    <Handle
+      className="node-handle"
       type="source"
       position={Position.Left}
       id="source-loop"
