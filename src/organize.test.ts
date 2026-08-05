@@ -101,6 +101,7 @@ describe("graph organization", () => {
         createEdge({ source: qa.id, target: analyzer.id }),
         createEdge({ source: analyzer.id, target: worker.id }),
         createEdge({ source: qa.id, target: worker.id }, "bidirectional"),
+        createEdge({ source: qa.id, target: intake.id }),
       ],
     };
 
@@ -114,29 +115,35 @@ describe("graph organization", () => {
       positionedQa,
       positionedAnalyzer,
       positionedWorker,
-    ].map((node) => node.position.x)).toEqual([448, 448, 48, 448, 848]);
+    ].map((node) => node.position.x)).toEqual([48, 448, 848, 848, 448]);
     expect([
       positionedIntake,
       positionedReviewer,
       positionedQa,
       positionedAnalyzer,
       positionedWorker,
-    ].map((node) => node.position.y)).toEqual([48, 316, 584, 584, 584]);
+    ].map((node) => node.position.y)).toEqual([234, 234, 234, 486, 486]);
     expect(positionedNote.position.x).toBeGreaterThanOrEqual(positionedQa.position.x);
     expect(positionedNote.position.y).toBeLessThan(positionedQa.position.y);
     result.document.edges.slice(0, 2).forEach((edge) =>
-      expect(edge).toMatchObject({
-        sourceHandle: "source-bottom",
-        targetHandle: "target-top",
-      }),
-    );
-    result.document.edges.slice(2, 4).forEach((edge) =>
       expect(edge).toMatchObject({
         sourceHandle: "source-right",
         targetHandle: "target-left",
       }),
     );
+    expect(result.document.edges[2]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-top",
+    });
+    expect(result.document.edges[3]).toMatchObject({
+      sourceHandle: "source-loop",
+      targetHandle: "target-right",
+    });
     expect(result.document.edges[4]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-bottom",
+    });
+    expect(result.document.edges[5]).toMatchObject({
       sourceHandle: "source-bottom",
       targetHandle: "target-bottom",
     });

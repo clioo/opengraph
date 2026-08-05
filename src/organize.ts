@@ -14,6 +14,7 @@ type ComponentLayout = {
   level: number;
   width: number;
   height: number;
+  localPositions: Map<string, { x: number; y: number }>;
 };
 
 const MARGIN = 48;
@@ -21,6 +22,7 @@ const COLUMN_GAP = 112;
 const ROW_GAP = 88;
 const SIBLING_GAP = 48;
 const CYCLE_GAP = 80;
+const CYCLE_ROW_GAP = 72;
 const NOTE_GAP = 56;
 
 const nodeWidth = (node: GraphNode) =>
@@ -123,6 +125,50 @@ const stronglyConnectedComponents = (nodes: GraphNode[], edges: GraphEdge[]) => 
   return components;
 };
 
+const measureComponent = (nodes: GraphNode[]) => {
+  const columns = nodes.length <= 3 ? nodes.length : Math.ceil(Math.sqrt(nodes.length));
+  const cells = nodes.map((node, index) => {
+    const row = Math.floor(index / columns);
+    const offset = index % columns;
+    return {
+      node,
+      row,
+      column: row % 2 === 0 ? offset : columns - 1 - offset,
+    };
+  });
+  const rowCount = Math.max(...cells.map(({ row }) => row)) + 1;
+  const columnWidths = Array.from({ length: columns }, (_, column) =>
+    Math.max(...cells.filter((cell) => cell.column === column).map(({ node }) => nodeWidth(node)), 0),
+  );
+  const rowHeights = Array.from({ length: rowCount }, (_, row) =>
+    Math.max(...cells.filter((cell) => cell.row === row).map(({ node }) => nodeHeight(node)), 0),
+  );
+  const columnX: number[] = [];
+  const rowY: number[] = [];
+  columnWidths.forEach((width, column) => {
+    columnX[column] =
+      column === 0 ? 0 : columnX[column - 1] + columnWidths[column - 1] + CYCLE_GAP;
+  });
+  rowHeights.forEach((height, row) => {
+    rowY[row] = row === 0 ? 0 : rowY[row - 1] + rowHeights[row - 1] + CYCLE_ROW_GAP;
+  });
+  return {
+    width: columnWidths.reduce((sum, width) => sum + width, 0) +
+      Math.max(0, columns - 1) * CYCLE_GAP,
+    height: rowHeights.reduce((sum, height) => sum + height, 0) +
+      Math.max(0, rowCount - 1) * CYCLE_ROW_GAP,
+    localPositions: new Map(
+      cells.map(({ node, row, column }) => [
+        node.id,
+        {
+          x: columnX[column] + (columnWidths[column] - nodeWidth(node)) / 2,
+          y: rowY[row] + (rowHeights[row] - nodeHeight(node)) / 2,
+        },
+      ]),
+    ),
+  };
+};
+
 const componentGraph = (nodes: GraphNode[], edges: GraphEdge[]) => {
   const outlineOrder = new Map(nodes.map((node, index) => [node.id, index]));
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -165,14 +211,12 @@ const componentGraph = (nodes: GraphNode[], edges: GraphEdge[]) => {
 
   const components: ComponentLayout[] = componentIds.map((ids, index) => {
     const componentNodes = ids.map((id) => nodeById.get(id)!);
+    const measured = measureComponent(componentNodes);
     return {
       index,
       nodes: componentNodes,
       level: levels[index],
-      width:
-        componentNodes.reduce((width, node) => width + nodeWidth(node), 0) +
-        Math.max(0, componentNodes.length - 1) * CYCLE_GAP,
-      height: Math.max(...componentNodes.map(nodeHeight)),
+      ...measured,
     };
   });
 
@@ -213,13 +257,12 @@ const layoutWorkflowNodes = (nodes: GraphNode[], edges: GraphEdge[]) => {
   const positions = new Map<string, { x: number; y: number }>();
 
   const placeComponent = (component: ComponentLayout, x: number, y: number) => {
-    let memberX = x;
     component.nodes.forEach((node) => {
+      const local = component.localPositions.get(node.id)!;
       positions.set(node.id, {
-        x: memberX,
-        y: y + (component.height - nodeHeight(node)) / 2,
+        x: x + local.x,
+        y: y + local.y,
       });
-      memberX += nodeWidth(node) + CYCLE_GAP;
     });
   };
 
@@ -394,6 +437,7 @@ const routeEdges = (
   components: ComponentLayout[],
   componentOf: Map<string, number>,
   direction: LayoutDirection,
+  positionedNodes: GraphNode[],
 ) =>
   edges.map((edge) => {
     if (edge.source === edge.target) return edge;
@@ -405,8 +449,18 @@ const routeEdges = (
       const component = components.find(({ index }) => index === sourceComponent)!;
       const sourceIndex = component.nodes.findIndex((node) => node.id === edge.source);
       const targetIndex = component.nodes.findIndex((node) => node.id === edge.target);
+      const source = positionedNodes.find((node) => node.id === edge.source)!;
+      const target = positionedNodes.find((node) => node.id === edge.target)!;
       const feedback =
-        edge.data?.direction === "bidirectional" || targetIndex < sourceIndex;
+        edge.data?.direction === "bidirectional" ||
+        targetIndex < sourceIndex ||
+        Math.abs(targetIndex - sourceIndex) > 1;
+      if (!feedback && target.position.y > source.position.y + 1) {
+        return { ...edge, sourceHandle: "source-bottom", targetHandle: "target-top" };
+      }
+      if (!feedback && target.position.x < source.position.x) {
+        return { ...edge, sourceHandle: "source-loop", targetHandle: "target-right" };
+      }
       return {
         ...edge,
         sourceHandle: feedback ? "source-bottom" : "source-right",
@@ -449,6 +503,7 @@ export const organizeGraphDocument = (document: GraphDocument): OrganizeResult =
         layout.components,
         layout.componentOf,
         layout.direction,
+        layout.nodes,
       ),
     },
     connectionsAdded: additions.length,
