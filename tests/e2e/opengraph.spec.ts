@@ -269,6 +269,7 @@ test.describe("OpenGraph", () => {
           edge("qa-analyzer", "qa", "analyzer"),
           edge("analyzer-worker", "analyzer", "worker"),
           edge("qa-worker", "qa", "worker", "bidirectional"),
+          edge("qa-intake", "qa", "intake"),
         ],
       };
       localStorage.removeItem("opengraph.graph-library.v1");
@@ -291,29 +292,36 @@ test.describe("OpenGraph", () => {
     const qa = node("qa");
     const analyzer = node("analyzer");
     const worker = node("worker");
-    expect(intake.position.x).toBe(reviewer.position.x);
-    expect(intake.position.y).toBeLessThan(reviewer.position.y);
-    expect(reviewer.position.y).toBeLessThan(qa.position.y);
-    expect([qa.position.y, analyzer.position.y, worker.position.y]).toEqual([
-      qa.position.y,
-      qa.position.y,
-      qa.position.y,
+    expect([intake.position.y, reviewer.position.y, qa.position.y]).toEqual([
+      intake.position.y,
+      intake.position.y,
+      intake.position.y,
     ]);
-    expect(qa.position.x).toBeLessThan(analyzer.position.x);
-    expect(analyzer.position.x).toBeLessThan(worker.position.x);
+    expect(intake.position.x).toBeLessThan(reviewer.position.x);
+    expect(reviewer.position.x).toBeLessThan(qa.position.x);
+    expect(analyzer.position.y).toBeGreaterThan(qa.position.y);
+    expect(worker.position.y).toBe(analyzer.position.y);
+    expect(analyzer.position.x).toBe(qa.position.x);
+    expect(worker.position.x).toBe(reviewer.position.x);
     graph.edges.slice(0, 2).forEach((edge: any) =>
-      expect(edge).toMatchObject({
-        sourceHandle: "source-bottom",
-        targetHandle: "target-top",
-      }),
-    );
-    graph.edges.slice(2, 4).forEach((edge: any) =>
       expect(edge).toMatchObject({
         sourceHandle: "source-right",
         targetHandle: "target-left",
       }),
     );
+    expect(graph.edges[2]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-top",
+    });
+    expect(graph.edges[3]).toMatchObject({
+      sourceHandle: "source-loop",
+      targetHandle: "target-right",
+    });
     expect(graph.edges[4]).toMatchObject({
+      sourceHandle: "source-bottom",
+      targetHandle: "target-bottom",
+    });
+    expect(graph.edges[5]).toMatchObject({
       sourceHandle: "source-bottom",
       targetHandle: "target-bottom",
     });
