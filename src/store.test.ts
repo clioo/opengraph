@@ -225,7 +225,7 @@ describe("OpenGraph store", () => {
   it("keeps editing available when a confirmed transaction cannot persist", () => {
     const store = useOpenGraphStore.getState();
     const setItemSpy = vi
-      .spyOn(Storage.prototype, "setItem")
+      .spyOn(localStorage, "setItem")
       .mockImplementation(() => {
         throw new Error("quota");
       });
@@ -313,7 +313,7 @@ describe("OpenGraph store", () => {
     expect(loadDocument().name).toBe("Workflow");
 
     const setItemSpy = vi
-      .spyOn(Storage.prototype, "setItem")
+      .spyOn(localStorage, "setItem")
       .mockImplementation(() => {
         throw new Error("storage unavailable");
       });
@@ -329,14 +329,14 @@ describe("OpenGraph store", () => {
       name: "Workflow",
     });
     const setItemSpy = vi
-      .spyOn(Storage.prototype, "setItem")
+      .spyOn(localStorage, "setItem")
       .mockImplementation(() => {
         throw new Error("quota");
       });
     expect(persistDocument(makeInitialDocument())).toBe(false);
     setItemSpy.mockRestore();
     const getItemSpy = vi
-      .spyOn(Storage.prototype, "getItem")
+      .spyOn(localStorage, "getItem")
       .mockImplementation(() => {
         throw new Error("blocked");
       });
