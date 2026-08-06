@@ -320,6 +320,10 @@ type OpenGraphState = {
   setAppearance: (appearance: Appearance) => void;
   setToast: (toast: string | null) => void;
   addNode: (node: GraphNode) => void;
+  quickAddStep: (
+    text: string,
+    fallbackPosition: { x: number; y: number },
+  ) => string | null;
   addEdgeFromConnection: (connection: {
     source: string;
     target: string;
@@ -448,6 +452,56 @@ export const useOpenGraphStore = create<OpenGraphState>((set, get) => ({
         : node
       return { ...document, nodes: [...document.nodes, nextNode] }
     }),
+  quickAddStep: (text, fallbackPosition) => {
+    const sentence = text.trim().replace(/\s+/g, " ");
+    if (!sentence) return null;
+    const state = get();
+    const selection = state.selected;
+    const anchor =
+      selection?.kind === "node"
+        ? state.document.nodes.find(
+            (node) => node.id === selection.id && node.type === "workflow",
+          )
+        : undefined;
+    // Place after the anchor (matching the example graph's column rhythm) or
+    // at the given fallback, bumping down until the spot is free.
+    const position = anchor
+      ? { x: anchor.position.x + 286, y: anchor.position.y }
+      : { ...fallbackPosition };
+    const taken = (candidate: { x: number; y: number }) =>
+      state.document.nodes.some(
+        (node) =>
+          Math.abs(node.position.x - candidate.x) < 64 &&
+          Math.abs(node.position.y - candidate.y) < 64,
+      );
+    while (taken(position)) position.y += 96;
+    const spoken = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+    const title =
+      spoken.length > 48 ? `${spoken.slice(0, 47).trimEnd()}…` : spoken;
+    const node = createWorkflowNode(position, title);
+    if (node.data.kind === "workflow")
+      node.data = {
+        ...node.data,
+        description: title === spoken ? "" : spoken,
+        modelOverride: state.document.defaults.model,
+      };
+    const edge = anchor
+      ? createEdge({
+          source: anchor.id,
+          target: node.id,
+          sourceHandle: "source-right",
+          targetHandle: "target-left",
+        })
+      : null;
+    // One commit — node and wire land as a single undo step.
+    get().commit((document) => ({
+      ...document,
+      nodes: [...document.nodes, node],
+      edges: edge ? [...document.edges, edge] : document.edges,
+    }));
+    set({ selected: { id: node.id, kind: "node" } });
+    return node.id;
+  },
   addEdgeFromConnection: (connection) => {
     if (hasEquivalentEdge(get().document.edges, connection)) return false;
     get().commit((document) => {
