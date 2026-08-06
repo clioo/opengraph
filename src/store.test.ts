@@ -124,6 +124,38 @@ describe("OpenGraph store", () => {
     ).toBe(false);
   });
 
+  it("ignores duplicate connections and reports whether an edge was added", () => {
+    const store = useOpenGraphStore.getState();
+    const a = createWorkflowNode({ x: 0, y: 0 });
+    const b = createWorkflowNode({ x: 200, y: 0 });
+    store.addNode(a);
+    store.addNode(b);
+    const before = useOpenGraphStore.getState().document.edges.length;
+    expect(store.addEdgeFromConnection({ source: a.id, target: b.id })).toBe(
+      true,
+    );
+    const revisionAfterAdd = useOpenGraphStore.getState().revision;
+    expect(store.addEdgeFromConnection({ source: a.id, target: b.id })).toBe(
+      false,
+    );
+    expect(useOpenGraphStore.getState().document.edges).toHaveLength(
+      before + 1,
+    );
+    expect(useOpenGraphStore.getState().revision).toBe(revisionAfterAdd);
+    expect(store.addEdgeFromConnection({ source: b.id, target: a.id })).toBe(
+      true,
+    );
+    expect(store.addEdgeFromConnection({ source: a.id, target: a.id })).toBe(
+      true,
+    );
+    expect(store.addEdgeFromConnection({ source: a.id, target: a.id })).toBe(
+      false,
+    );
+    expect(useOpenGraphStore.getState().document.edges).toHaveLength(
+      before + 3,
+    );
+  });
+
   it("supports undo, redo, capability checks, and UI state actions", () => {
     const store = useOpenGraphStore.getState();
     expect(store.canUndo()).toBe(false);

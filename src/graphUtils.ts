@@ -116,6 +116,20 @@ export const createEdge = (
   animated: false,
 });
 
+export const hasEquivalentEdge = (
+  edges: GraphEdge[],
+  connection: ConnectionLike,
+): boolean => {
+  const candidate = createEdge(connection);
+  return edges.some(
+    (edge) =>
+      edge.source === candidate.source &&
+      edge.target === candidate.target &&
+      edge.sourceHandle === candidate.sourceHandle &&
+      edge.targetHandle === candidate.targetHandle,
+  );
+};
+
 export const resolvedNodeSettings = (
   node: GraphNode,
   document: GraphDocument,
