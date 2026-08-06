@@ -343,6 +343,7 @@ type OpenGraphState = {
   canRedo: () => boolean;
   replaceDocument: (document: GraphDocument) => void;
   createGraph: (project?: string) => void;
+  importGraph: (document: GraphDocument) => void;
   switchGraph: (id: string) => void;
   renameGraph: (id: string, name: string) => void;
   renameProject: (project: string, name: string) => void;
@@ -628,6 +629,34 @@ export const useOpenGraphStore = create<OpenGraphState>((set, get) => ({
         persistGraphLibrary(graphs, graph.id);
       return {
         document: graph.document,
+        graphs,
+        activeGraphId: graph.id,
+        revision: state.revision + 1,
+        past: [],
+        future: [],
+        transientBefore: null,
+        selected: null,
+        settingsOpen: false,
+        activeTool: "select",
+        saveStatus: saved ? "saved" : "error",
+      };
+    }),
+  importGraph: (imported) =>
+    set((state) => {
+      const document = normalizeDocument(imported);
+      const graph: SavedGraph = {
+        id: makeId("graph"),
+        project:
+          state.graphs.find((item) => item.id === state.activeGraphId)
+            ?.project || "Personal",
+        archived: false,
+        document,
+      };
+      const graphs = [...state.graphs, graph];
+      const saved =
+        persistDocument(document) && persistGraphLibrary(graphs, graph.id);
+      return {
+        document,
         graphs,
         activeGraphId: graph.id,
         revision: state.revision + 1,

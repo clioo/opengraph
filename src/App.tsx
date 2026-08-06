@@ -31,7 +31,14 @@ import {
   selectNodeModel,
   toggleEdgeDirection,
 } from "./graphUtils";
-import { copyBlobToClipboard, downloadBlob, renderGraphToBlob } from "./export";
+import {
+  copyBlobToClipboard,
+  documentToJsonBlob,
+  downloadBlob,
+  graphJsonFileName,
+  parseDocumentJson,
+  renderGraphToBlob,
+} from "./export";
 import { MODEL_PREFERENCES_KEY, useOpenGraphStore } from "./store";
 import type {
   Appearance,
@@ -115,7 +122,9 @@ function Icon({
     | "plus"
     | "archive"
     | "restore"
-    | "organize";
+    | "organize"
+    | "download"
+    | "upload";
   size?: number;
 }) {
   const paths = {
@@ -199,6 +208,8 @@ function Icon({
         <path d="M9 7.5h4M12 7.5v10h3" />
       </>
     ),
+    download: <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" />,
+    upload: <path d="M12 14V4m0 0 4 4m-4-4-4 4M5 19h14" />,
   }[name];
   return (
     <svg
@@ -252,6 +263,7 @@ function App() {
     layoutExternal,
     undoExternal,
     createGraph,
+    importGraph,
     switchGraph,
     renameGraph,
     renameProject,
@@ -700,6 +712,23 @@ function App() {
       window.setTimeout(() => setToast(null), 4200);
     }
   };
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const handleExportJson = () => {
+    downloadBlob(documentToJsonBlob(document), graphJsonFileName(document.name));
+    setToast("Graph downloaded as JSON");
+    window.setTimeout(() => setToast(null), 4200);
+  };
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    const parsed = parseDocumentJson(await file.text());
+    if (parsed) {
+      importGraph(parsed);
+      setToast(`Imported “${parsed.name}” as a new graph`);
+    } else {
+      setToast("That file isn’t an OpenGraph JSON export");
+    }
+    window.setTimeout(() => setToast(null), 4200);
+  };
   const fit = () => fitView({ padding: 0.18, duration: 200 });
   const organize = useCallback(() => {
     setViewportLive(getViewport());
@@ -883,6 +912,28 @@ function App() {
             <Icon name="redo" />
           </IconButton>
         </div>
+        <div className="history-actions">
+          <IconButton
+            label="Import graph from JSON"
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Icon name="upload" />
+          </IconButton>
+          <IconButton label="Download graph as JSON" onClick={handleExportJson}>
+            <Icon name="download" />
+          </IconButton>
+        </div>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0] ?? null;
+            event.target.value = "";
+            void handleImportFile(file);
+          }}
+        />
         <div className="appearance-switch" role="group" aria-label="Appearance">
           <button
             className={appearance === "light" ? "selected" : ""}

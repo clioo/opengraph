@@ -1,7 +1,15 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { toBlob } from 'html-to-image'
-import { createWorkflowNode } from './graphUtils'
-import { copyBlobToClipboard, downloadBlob, renderGraphToBlob } from './export'
+import { createWorkflowNode, normalizeDocument } from './graphUtils'
+import {
+  copyBlobToClipboard,
+  documentToJsonBlob,
+  downloadBlob,
+  graphJsonFileName,
+  parseDocumentJson,
+  renderGraphToBlob,
+} from './export'
+import { makeInitialDocument } from './store'
 
 vi.mock('html-to-image', () => ({ toBlob: vi.fn() }))
 
@@ -123,5 +131,34 @@ describe('graph export', () => {
     vi.runAllTimers()
     expect(revokeObjectURL).toHaveBeenCalledWith(url)
     expect(remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('round-trips a document through JSON export and import', () => {
+    const graph = makeInitialDocument()
+    const blob = documentToJsonBlob(graph)
+    expect(blob.type).toBe('application/json')
+    expect(blob.size).toBeGreaterThan(0)
+    expect(parseDocumentJson(JSON.stringify(graph, null, 2))).toEqual(
+      normalizeDocument(graph),
+    )
+  })
+
+  it('rejects JSON that is malformed or not a graph document', () => {
+    expect(parseDocumentJson('{broken')).toBeNull()
+    expect(parseDocumentJson('"just a string"')).toBeNull()
+    expect(
+      parseDocumentJson(JSON.stringify({ version: 2, nodes: [], edges: [] })),
+    ).toBeNull()
+    expect(
+      parseDocumentJson(
+        JSON.stringify({ ...makeInitialDocument(), defaults: undefined }),
+      ),
+    ).toBeNull()
+  })
+
+  it('derives safe JSON filenames from graph names', () => {
+    expect(graphJsonFileName('My Graph!')).toBe('my-graph.json')
+    expect(graphJsonFileName('  Retrieval — v2  ')).toBe('retrieval-v2.json')
+    expect(graphJsonFileName('   ')).toBe('opengraph.json')
   })
 })
